@@ -1,54 +1,58 @@
 #!/bin/zsh
 # acowork 可用性探测:对 grok/codex/opencode 各发一个最小探针
 # 不可用(额度耗尽/限流/超时/环境错误)即摘除,输出 JSON roster 供编排用。
+#
+# v2:不再自带 CLI 姿势/超时/归因逻辑——探针直接走 dispatch.sh(单源),
+#     自身只做三件事:并行编排、行锚 PONG 判定、roster 汇总。
+#     探针带只读锁并在空目录执行(探测存活不需要任何写权限面)。
+#
 # 用法:zsh probe.sh [超时秒数,默认120]
 # 输出:stderr=人类可读表格;stdout 最后一段为 JSON(roster)
 # 退出码:0=至少一家可用;1=全部不可用;2=脚本自身错误
-#
-# 判定原则(经 grok 交叉评审修订):
-#   ok = 退出码==0 且输出含成功标记 —— 错误关键词只归类原因,不参与 ok 判定
-#   (否则评审文本里提到 "quota" 之类的词会把成功回包误杀)
 
 set -u
 T=${1:-120}
-[[ "$T" =~ ^[1-9][0-9]*$ ]] || T=120   # 非正整数回退默认,防 alarm 0 挂死
-W=$(mktemp -d /tmp/acowork-probe.XXXXXX) || exit 2
-trap 'rm -rf "$W"' EXIT
+[[ "$T" =~ ^[1-9][0-9]*$ ]] || T=120
+readonly SCRIPT_DIR=${0:A:h}
+[[ -f "$SCRIPT_DIR/dispatch.sh" ]] || { print -u2 "dispatch.sh not found next to probe.sh"; exit 2 }
 
-# perl alarm 实现 macOS 下的超时(exec 后同 PID 收 SIGALRM;exec 失败必须 or exit 127,否则 perl 默认 exit 0 洗成"跑完了")
-run_probe() {
-  local name=$1; shift
-  ( perl -e 'alarm shift; exec @ARGV or exit 127' "$T" "$@" </dev/null >"$W/$name.out" 2>&1 )
-  echo $? >"$W/$name.code"
+W=$(mktemp -d /tmp/acowork-probe.XXXXXX) || exit 2
+trap 'rm -rf "$W" "$PROBE_DIR"' EXIT
+PROBE_DIR=$(mktemp -d /tmp/acowork-probe-cwd.XXXXXX)   # 空目录:探针不碰目标仓库,不加载仓库指令
+
+print -r -- 'Reply with exactly: PONG-OK' > "$W/probe-task.md"
+
+probe_one() {
+  local agent=$1
+  zsh "$SCRIPT_DIR/dispatch.sh" "$agent" "$W/probe-task.md" \
+    --no-protocol --readonly --cwd "$PROBE_DIR" --timeout "$T" \
+    > "$W/$agent.out" 2> "$W/$agent.meta"
+  echo $? > "$W/$agent.code"
 }
 
-run_probe grok      "$HOME/.grok/bin/grok" -p 'Reply with exactly: PONG-OK' &
-run_probe codex     /opt/homebrew/bin/codex exec --skip-git-repo-check 'Reply with exactly: PONG-OK' &
-run_probe opencode  "$HOME/.opencode/bin/opencode" run 'Reply with exactly: PONG-OK' &
+probe_one grok      &
+probe_one codex     &
+probe_one opencode  &
 wait
 
-# ok 判定与原因归类分离;成功=退出码0 且输出含「行锚定」的 PONG-OK(行锚防 prompt 回显假阳性,大小写不敏感防变体)
+# 判定:dispatch 退出码 0 且输出含「行锚定」PONG-OK(行锚防 prompt 回显假阳性)
 judge() {
-  local name=$1 code out reason
-  if [[ -f "$W/$name.code" ]]; then
-    code=$(<"$W/$name.code")
-  else
-    code=999   # job 未及写状态即被杀
-  fi
-  out=$(<"$W/$name.out" 2>/dev/null) || out=''
-
-  if [[ "$code" -eq 0 ]] && print -r -- "$out" | grep -qi '^PONG-OK[[:space:]]*$'; then
+  local name=$1 code reason meta_err
+  code=$(<"$W/$name.code")
+  if [[ "$code" -eq 0 ]] && grep -qi '^PONG-OK[[:space:]]*$' "$W/$name.out"; then
     reason='OK'
-  elif [[ "$code" -eq 999 ]]; then
-    reason='job状态丢失(外部信号/SIGKILL?)'
-  elif [[ "$code" -ge 128 ]]; then
-    reason="超时或被信号终止(>${T}s,code=$code)"
-  elif print -r -- "$out" | grep -qiE 'usage limit|quota|rate.?limit|(^|[^0-9])429([^0-9]|$)'; then
-    reason='额度/限流'
-  elif [[ "$code" -ne 0 ]]; then
-    reason="退出码 $code"
   else
-    reason="无有效回复"
+    # 复用 dispatch 的归因(单源;仅当 dispatch 未给归因时兜底)
+    meta_err=$(grep -o '"error":"[^"]*"' "$W/$name.meta" 2>/dev/null | head -1 | sed 's/"error":"//; s/"$//')
+    if [[ "$code" -eq 2 ]]; then
+      reason="用法错误(${meta_err:-see dispatch})"
+    elif [[ -n "$meta_err" && "$meta_err" != "null" ]]; then
+      reason="$meta_err"
+    elif [[ "$code" -ne 0 ]]; then
+      reason="退出码 $code"
+    else
+      reason="无有效回复"
+    fi
   fi
 
   local avail

@@ -29,7 +29,9 @@ git clone https://github.com/songyang753-cloud/acowork.git ~/.claude/skills/acow
 ln -s /path/to/acowork ~/.claude/skills/acowork
 ```
 
-前置:本机装有 [Claude Code](https://claude.com/claude-code) 和至少一个受支持的 CLI agent(grok / codex / opencode,装哪个协作哪个;一个都没有时 skill 会如实告知并退出,不硬演协作)。
+前置:本机装有 [Claude Code](https://claude.com/claude-code) 和至少一个受支持的 CLI agent(grok / codex / opencode,装哪个协作哪个;一个都没有时 skill 会如实告知并退出,不硬演协作)。脚本依赖 `zsh` 与 `perl`(macOS 自带);CLI 路径可用环境变量 `GROK_BIN / OPENCODE_BIN / CODEX_BIN` 覆盖(换机器不用改脚本,也是测试注入点)。
+
+改动脚本后跑行为测试:`zsh scripts/test.sh`(假 CLI 覆盖额度/超时/空回复/词边界等判定分支,14 用例全绿才算过)。
 
 ## 使用
 
@@ -55,10 +57,11 @@ probe(探测可用)→ plan(规划分工+冻结需求清单)→ [confirm(一轮�
 acowork/
 ├── SKILL.md               # 主持者手册(Claude 视角:调度原则+交付纪律)
 ├── protocol.md            # 中立协作契约(角色/任务卡/回包/评审/裁决格式+状态机)
-├── references/bad-cases.md  # 57 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
+├── references/bad-cases.md  # 62 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
 └── scripts/
     ├── probe.sh           # 可用性探测 → JSON roster(没额度直接摘除)
-    └── dispatch.sh        # 统一派活器(姿势封装 + --readonly 物理只读锁 + 超时 + 标准回包)
+    └── dispatch.sh        # 统一派活器(姿势封装 + --readonly 物理只读锁 + 进程组超时 + 标准回包)
+    └── test.sh            # 行为测试(假 CLI 注入,14 用例)
 ```
 
 **物理只读锁**是评审环节的关键:grok 用工具白名单、codex 用 read-only 沙箱、opencode 用 plan agent——评审者想改也改不了,不靠自觉。
@@ -79,6 +82,10 @@ acowork/
 - 各 CLI 的额度/网络是外部依赖:探测只代表探测时刻,任务中失败走降级链(重试1次→改派→主持者接手)
 - 协作有 token 成本:单家产出 <200 字的活不值得派,自己做
 - 涉密内容不要派给外部 agent(prompt 会离开主持者上下文)
+
+## 镜像
+
+本仓(GitHub)是主仓,内容与内网 GitLab `songyang/acowork` 保持同步(手动双推);两处内容应一致,发现漂移以 GitHub 为准。
 
 ## License
 
