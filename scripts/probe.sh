@@ -5,6 +5,9 @@
 # v2:不再自带 CLI 姿势/超时/归因逻辑——探针直接走 dispatch.sh(单源),
 #     自身只做三件事:并行编排、行锚 PONG 判定、roster 汇总。
 #     探针带只读锁并在空目录执行(探测存活不需要任何写权限面)。
+# v3(2026-09-29):busy≠死亡——探测失败若归因 busy(该 agent 正被并发派发,
+#     dispatch agent 锁快速失败),判「可用,占用中」而不是摘除(实测:grok 正在
+#     另一会话跑 214s 评审,probe 误报"退出码1"导致整轮丢失深审员)。
 #
 # 用法:zsh probe.sh [超时秒数,默认120]
 # 输出:stderr=人类可读表格;stdout 最后一段为 JSON(roster)
@@ -24,8 +27,9 @@ print -r -- 'Reply with exactly: PONG-OK' > "$W/probe-task.md"
 
 probe_one() {
   local agent=$1
+  # --retry 0:探针不自动重试(空回复重试会把死 agent 的探测时间翻倍;摘除前重探由 A4 流程管)
   zsh "$SCRIPT_DIR/dispatch.sh" "$agent" "$W/probe-task.md" \
-    --no-protocol --readonly --cwd "$PROBE_DIR" --timeout "$T" \
+    --no-protocol --readonly --cwd "$PROBE_DIR" --timeout "$T" --retry 0 \
     > "$W/$agent.out" 2> "$W/$agent.meta"
   echo $? > "$W/$agent.code"
 }
@@ -56,7 +60,13 @@ judge() {
   fi
 
   local avail
-  [[ "$reason" == 'OK' ]] && avail=true || avail=false
+  # busy ≠ 死亡:该 agent 正被并发派发(dispatch 锁快速失败)→ 判可用,占用中
+  if [[ "$reason" == 'OK' || "$reason" == busy* ]]; then
+    avail=true
+    [[ "$reason" == busy* ]] && reason="$reason;视为可用(占用中)"
+  else
+    avail=false
+  fi
   print -r -- "$name|$avail|$reason"
 }
 
