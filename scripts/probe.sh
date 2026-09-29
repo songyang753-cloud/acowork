@@ -1,7 +1,7 @@
 #!/bin/zsh
 # council 可用性探测:对 grok/codex/opencode 各发一个最小探针
 # 不可用(额度耗尽/限流/超时/环境错误)即摘除,输出 JSON roster 供编排用。
-# 用法:zsh probe.sh [超时秒数,默认90]
+# 用法:zsh probe.sh [超时秒数,默认120]
 # 输出:stderr=人类可读表格;stdout 最后一段为 JSON(roster)
 # 退出码:0=至少一家可用;1=全部不可用;2=脚本自身错误
 #
@@ -10,8 +10,8 @@
 #   (否则评审文本里提到 "quota" 之类的词会把成功回包误杀)
 
 set -u
-T=${1:-90}
-[[ "$T" =~ ^[1-9][0-9]*$ ]] || T=90   # 非正整数回退默认,防 alarm 0 挂死
+T=${1:-120}
+[[ "$T" =~ ^[1-9][0-9]*$ ]] || T=120   # 非正整数回退默认,防 alarm 0 挂死
 W=$(mktemp -d /tmp/council-probe.XXXXXX) || exit 2
 trap 'rm -rf "$W"' EXIT
 

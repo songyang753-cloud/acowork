@@ -21,7 +21,7 @@ description: 本机多 CLI agent 协同工作(Claude 主持,codex/grok/opencode 
 ```bash
 SKILL=<本skill目录>   # 如 ~/council(clone 到哪就是哪)
 WORK=$(mktemp -d /tmp/council.XXXXXX) && mkdir -p $WORK/{tasks,replies,reviews,verdicts}
-zsh $SKILL/scripts/probe.sh 90 > $WORK/roster.json        # 可用性探测,stdout=JSON
+zsh $SKILL/scripts/probe.sh 120 > $WORK/roster.json        # 可用性探测,stdout=JSON
 ```
 
 - roster 里 `available:false` 的 agent,**写码和评审都不派**(用户明确要求)
@@ -87,5 +87,5 @@ zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeo
 
 - grok v1.0.41(`~/.grok/bin/grok`,sub2api 转光帆网关;必须 `-p`,位置参数会进 TUI 挂死)
 - opencode v1.18.33(`~/.opencode/bin/opencode`,glm provider,同 GLM 后端——与 Claude 互审价值低)
-- codex(`/opt/homebrew/bin/codex`,额度曾耗尽至 10-04;非 git 目录需 `--skip-git-repo-check`)
-- grok 评审深度高但慢(107s/轮),opencode 快;调度时按此特性路由
+- codex(`/opt/homebrew/bin/codex`,2026-09-29 额度恢复后成功路径已实测;非 git 目录需 `--skip-git-repo-check`)
+- grok 评审深度高但慢(107s/轮),opencode 快但经 glm 网关有延迟波动(探针预算给 120s+);调度时按此特性路由

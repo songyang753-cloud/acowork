@@ -9,7 +9,7 @@
 | A1 🌱 | 某家额度耗尽(codex 曾 10-04 前 用尽) | probe 摘除,写码/评审都不派;roster 记录原因 |
 | A2 🌱 | CLI 用法姿势错:grok 传位置参数进 TUI 挂死;codex 非 git 目录拒跑;codex stdin 等待 | 全部走 dispatch.sh 封装,主持者不手拼命令 |
 | A3 🌱 | 无 TTY 环境 grok 报 ENXIO | 同 A2,`-p` 模式不会触发 |
-| A4 | 探针网络抖动误判不可用 | 摘除前对可疑者重探一次;仍失败才摘除 |
+| A4 🌱 | 探针网络抖动误判不可用(opencode 经 glm 网关延迟波动,90s 探针超时摘除、重探 58s 恢复) | 摘除前对可疑者重探一次;仍失败才摘除;probe 默认超时 120s 留余量 |
 | A5 | 探针本身成功但真任务失败(额度临界) | dispatch 失败即按 F 类处置,probe 结果只作初始 roster |
 | A6 🌱 | glm 网关 socket 瞬断(opencode 日志 `stream error: socket connection closed`),CLI 优雅退出但零产出 | 按 F 类重试 1 次;仍失败改派 |
 | A7 🌱 | 写码任务 CLI 退出码非 0 但目标文件已产出(收尾流断) | dispatch ok 只是 CLI 层语义;**execute 后主持者必须亲手验收产出**(文件存在性+内容+边界 diff),不能只信退出码 |
