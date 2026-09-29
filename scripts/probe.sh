@@ -1,5 +1,5 @@
 #!/bin/zsh
-# council 可用性探测:对 grok/codex/opencode 各发一个最小探针
+# acowork 可用性探测:对 grok/codex/opencode 各发一个最小探针
 # 不可用(额度耗尽/限流/超时/环境错误)即摘除,输出 JSON roster 供编排用。
 # 用法:zsh probe.sh [超时秒数,默认120]
 # 输出:stderr=人类可读表格;stdout 最后一段为 JSON(roster)
@@ -12,7 +12,7 @@
 set -u
 T=${1:-120}
 [[ "$T" =~ ^[1-9][0-9]*$ ]] || T=120   # 非正整数回退默认,防 alarm 0 挂死
-W=$(mktemp -d /tmp/council-probe.XXXXXX) || exit 2
+W=$(mktemp -d /tmp/acowork-probe.XXXXXX) || exit 2
 trap 'rm -rf "$W"' EXIT
 
 # perl alarm 实现 macOS 下的超时(exec 后同 PID 收 SIGALRM;exec 失败必须 or exit 127,否则 perl 默认 exit 0 洗成"跑完了")
@@ -66,7 +66,7 @@ for agent in grok codex opencode; do
 done
 
 # 人类可读表格 → stderr(for 循环直读变量,不走管道:print -u2 接不进 pipe)
-print -u2 -- "=== council 探测结果($(date '+%H:%M:%S'))==="
+print -u2 -- "=== acowork 探测结果($(date '+%H:%M:%S'))==="
 for line in ${(f)RESULTS}; do
   name=${line%%|*}; rest=${line#*|}; avail=${rest%%|*}; reason=${rest#*|}
   [[ "$avail" == "true" ]] && mark="✅" || mark="❌"

@@ -1,11 +1,11 @@
 ---
-name: council
+name: acowork
 description: 本机多 CLI agent 协同工作(Claude 主持,codex/grok/opencode 为同僚)。当用户要「多agent协作/协同工作/大家一起干/一起规划分工/交叉审查/互相review/叫上 codex/grok/opencode/发挥各家优势/团队协作提升交付速度和质量」时使用。核心机制:协议中立化(protocol.md 注入,任何 agent 都能按契约参与)、文件系统即消息总线(共享工作区+状态机,断点可恢复)、探测摘除(没额度的不派活)、跨源交叉评审(避开同源模型盲区)、统一派活器封装全部 CLI 姿势差异、回声确认防理解漂移、裁决制+机器门禁保质量。
 ---
 
-# council:多 CLI Agent 协同(Claude 主持)
+# acowork:多 CLI Agent 协同(Claude 主持)
 
-> council = 议会:Claude 是主持者,codex/grok/opencode 是议员;讨论、分工、质询、裁决。
+> acowork = **a**gent **co**-work:Claude 主持,grok/codex/opencode 是同僚——讨论、分工、交叉质询、裁决,像一支真正的团队。
 
 四个 agent(Claude/codex/grok/opencode)协同交付:讨论规划 → 并行执行 → 交叉评审 → 裁决合并。**Claude 是主持者和最终责任人,不是发号施令的旁观者**——每一步的质量门都由 Claude 亲手把。
 
@@ -19,9 +19,9 @@ description: 本机多 CLI agent 协同工作(Claude 主持,codex/grok/opencode 
 ## 1. 一次性准备(每个协作任务开头)
 
 ```bash
-SKILL=<本skill目录>   # 如 ~/council(clone 到哪就是哪)
-WORK=$(mktemp -d /tmp/council.XXXXXX) && mkdir -p $WORK/{tasks,replies,reviews,verdicts}
-echo "$WORK" > /tmp/council-work-pointer                  # 断点恢复指针(跨会话找回 WORK)
+SKILL=<本skill目录>   # 如 ~/acowork(clone 到哪就是哪)
+WORK=$(mktemp -d /tmp/acowork.XXXXXX) && mkdir -p $WORK/{tasks,replies,reviews,verdicts}
+echo "$WORK" > /tmp/acowork-work-pointer                  # 断点恢复指针(跨会话找回 WORK)
 echo '{"phase":"probe","tasks":[],"requirements":[]}' > $WORK/state.json
 echo '{}' > $WORK/ledger.json
 zsh $SKILL/scripts/probe.sh 120 > $WORK/roster.json        # 可用性探测,stdout=JSON
@@ -42,7 +42,7 @@ probe → plan → [confirm] → execute → review → adjudicate → merge →
 - 回炉小循环 = **完整链**(回炉产出必须过审);裁决采纳的 P0 未修复前禁止 merge
 - 终态只有 `done` 与 `done-with-exceptions`(例外清单交用户裁决)
 
-每步把进度写进 `$WORK/state.json`(最小 schema 见 protocol.md §2:`phase` + `tasks[{id,agent,status,attempt}]` + `requirements[{id,status,round}]`);会话断了从它恢复,跨会话用 `/tmp/council-work-pointer` 找回 `$WORK`,别依赖对话记忆。**acceptance 是 done 的唯一放行门**(见 3.6)。
+每步把进度写进 `$WORK/state.json`(最小 schema 见 protocol.md §2:`phase` + `tasks[{id,agent,status,attempt}]` + `requirements[{id,status,round}]`);会话断了从它恢复,跨会话用 `/tmp/acowork-work-pointer` 找回 `$WORK`,别依赖对话记忆。**acceptance 是 done 的唯一放行门**(见 3.6)。
 
 ## 3. 各步操作
 

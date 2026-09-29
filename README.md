@@ -1,13 +1,13 @@
-# council · 多 CLI Agent 协作议会
+# acowork · 多 CLI Agent 协作议会
 
-> Claude 是主持者,codex / grok / opencode 是议员:一起讨论规划、并行干活、交叉质询、裁决交付。
+> Claude 是主持者,codex / grok / opencode 是同僚:一起讨论规划、并行干活、交叉质询、裁决交付。
 > 一个 Claude Code skill,让本机的多个 AI CLI agent 像一个真正的团队那样协作。
 
 ## 为什么需要它
 
 单打独斗的 agent 有两类典型失败:**速度**(串行干活,一个人扛所有任务)和**质量**(同一模型自审=共用盲区,检查者和被检查者错一样)。
 
-council 的解法:
+acowork 的解法:
 
 | 问题 | 机制 |
 |---|---|
@@ -24,9 +24,9 @@ council 的解法:
 ## 安装
 
 ```bash
-git clone https://github.com/songyang753-cloud/council.git ~/.claude/skills/council
+git clone https://github.com/songyang753-cloud/acowork.git ~/.claude/skills/acowork
 # 或任意位置 clone 后软链:
-ln -s /path/to/council ~/.claude/skills/council
+ln -s /path/to/acowork ~/.claude/skills/acowork
 ```
 
 前置:本机装有 [Claude Code](https://claude.com/claude-code) 和至少一个受支持的 CLI agent(grok / codex / opencode,装哪个协作哪个;一个都没有时 skill 会如实告知并退出,不硬演协作)。
@@ -52,7 +52,7 @@ probe(探测可用)→ plan(规划分工+冻结需求清单)→ [confirm(一轮�
 ## 仓库结构
 
 ```
-council/
+acowork/
 ├── SKILL.md               # 主持者手册(Claude 视角:调度原则+交付纪律)
 ├── protocol.md            # 中立协作契约(角色/任务卡/回包/评审/裁决格式+状态机)
 ├── references/bad-cases.md  # 57 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)

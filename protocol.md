@@ -1,4 +1,4 @@
-# 多 Agent 协作协议 · council v1.1
+# 多 Agent 协作协议 · acowork v1.1
 
 你收到本文件,是因为你被邀请参与一项多 agent 协作(Claude / codex / grok / opencode 中的若干方)。读完本节即视为接受协议。任何 agent 都可能担任下述任何角色;你的角色由随后的任务卡标明。
 

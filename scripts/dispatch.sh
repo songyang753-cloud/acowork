@@ -1,5 +1,5 @@
 #!/bin/zsh
-# council 统一派活器:把任务卡派给指定 agent,封装各家 CLI 姿势差异。
+# acowork 统一派活器:把任务卡派给指定 agent,封装各家 CLI 姿势差异。
 # 主持者只用这一个入口派活,不需要记住每家的坑。
 #
 # 用法: dispatch.sh <grok|codex|opencode> <taskfile> [选项]
@@ -71,7 +71,7 @@ case "$agent" in
 esac
 
 # 派发(带超时,macOS 无 timeout 命令,用 perl alarm;stderr 分离捕捉用于归类)
-errlog=$(mktemp /tmp/council-dispatch.XXXXXX)
+errlog=$(mktemp /tmp/acowork-dispatch.XXXXXX)
 start=$SECONDS
 out=$(perl -e 'alarm shift; exec @ARGV or exit 127' "$T" "${cmd[@]}" </dev/null 2>"$errlog")
 code=$?
