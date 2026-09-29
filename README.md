@@ -65,6 +65,7 @@ acowork/
 ├── SKILL.md               # 主持者手册(Claude 视角:三条硬规则+两条路径+调度原则)
 ├── protocol.md            # 中立协作契约(角色/任务卡/回包/评审/裁决格式+状态机+账本单位)
 ├── references/bad-cases.md  # 69 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
+├── references/design-notes-v1.4.md  # v1.4 设计依据:20 个同类高分仓调研(机制↔来源↔证据)
 └── scripts/
     ├── probe.sh           # 可用性探测 → JSON roster(额度摘除;busy≠死亡)
     ├── dispatch.sh        # 统一派活器(姿势封装 + --readonly 只读锁 + 进程组超时 + 内容门禁
