@@ -55,7 +55,7 @@ probe(探测可用)→ plan(规划分工+冻结需求清单)→ [confirm(一轮�
 council/
 ├── SKILL.md               # 主持者手册(Claude 视角:调度原则+交付纪律)
 ├── protocol.md            # 中立协作契约(角色/任务卡/回包/评审/裁决格式+状态机)
-├── references/bad-cases.md  # 40 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
+├── references/bad-cases.md  # 57 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
 └── scripts/
     ├── probe.sh           # 可用性探测 → JSON roster(没额度直接摘除)
     └── dispatch.sh        # 统一派活器(姿势封装 + --readonly 物理只读锁 + 超时 + 标准回包)

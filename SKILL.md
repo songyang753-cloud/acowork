@@ -21,6 +21,9 @@ description: 本机多 CLI agent 协同工作(Claude 主持,codex/grok/opencode 
 ```bash
 SKILL=<本skill目录>   # 如 ~/council(clone 到哪就是哪)
 WORK=$(mktemp -d /tmp/council.XXXXXX) && mkdir -p $WORK/{tasks,replies,reviews,verdicts}
+echo "$WORK" > /tmp/council-work-pointer                  # 断点恢复指针(跨会话找回 WORK)
+echo '{"phase":"probe","tasks":[],"requirements":[]}' > $WORK/state.json
+echo '{}' > $WORK/ledger.json
 zsh $SKILL/scripts/probe.sh 120 > $WORK/roster.json        # 可用性探测,stdout=JSON
 ```
 
@@ -31,19 +34,24 @@ zsh $SKILL/scripts/probe.sh 120 > $WORK/roster.json        # 可用性探测,std
 ## 2. 状态机与推进(Claude 的主持循环)
 
 ```
-probe → plan → [confirm] → execute → review → adjudicate → merge → acceptance → done
-                                                       ↑______回炉小循环______|
+probe → plan → [confirm] → execute → review → adjudicate → merge → acceptance ──→ done
+                                    ↑_____________________|        |                |
+                                    |  (裁决采纳→修复卡)  ↑_______|  (未达标→回炉)  └→ done-with-exceptions
 ```
 
-每步把进度写进 `$WORK/state.json`(`{"phase":"...","tasks":[...]}`);会话断了从它恢复,文件全在 `$WORK`,别依赖对话记忆。**acceptance 是 done 的唯一放行门**(见 3.6)。
+- 回炉小循环 = **完整链**(回炉产出必须过审);裁决采纳的 P0 未修复前禁止 merge
+- 终态只有 `done` 与 `done-with-exceptions`(例外清单交用户裁决)
+
+每步把进度写进 `$WORK/state.json`(最小 schema 见 protocol.md §2:`phase` + `tasks[{id,agent,status,attempt}]` + `requirements[{id,status,round}]`);会话断了从它恢复,跨会话用 `/tmp/council-work-pointer` 找回 `$WORK`,别依赖对话记忆。**acceptance 是 done 的唯一放行门**(见 3.6)。
 
 ## 3. 各步操作
 
 ### 3.1 plan(规划与分工)
 - Claude 起草:任务拆分(标注依赖,DAG)、每张任务卡五要素(见 protocol.md §4)、验收标准优先写成可机器验证的
-- **冻结需求清单**:把用户原始需求拆成编号条目,连同每条的验收标准写入 `$WORK/REQUIREMENTS.md`——这是终验对账的唯一基准;验收标准一旦冻结不许放松(做不到就报例外,不许改判据换绿)
-- **文件边界不重叠**是并行写码的前提;有重叠的排串行
-- 调度六原则(protocol.md §8):可用性优先 / 跨源配对 / 独立并行 / 流水线(完成即审不等全员)/ 负载均衡 / 特长路由(grok=500k 长上下文+联网,opencode=GLM 快糙,claude=裁决合并)
+- **冻结需求清单**:把用户原始需求拆成编号条目,每条写明 **oracle(验证命令+期望结果)**,写入 `$WORK/REQUIREMENTS.md`——这是终验对账的唯一基准;验收标准一旦冻结不许放松(做不到就报例外,不许改判据换绿)
+- **需求基准须过两道眼**:①向用户复述清单要点请求确认(存在歧义/方向性分歧时必问,不要自作主张转写);②confirm 轮把清单同步给议员过目——防"Claude 转写时漏一条,acceptance 永远看不到"
+- **文件边界不重叠**是并行写码的前提;有重叠的排串行;任务卡禁止全仓 formatter/代码生成类操作(共享副作用会污染别家产出)
+- 调度四优先级(protocol.md §8):可用性 > 跨源配对 > 特长路由(grok=500k 长上下文+深审,opencode=快,codex=跨源意见)> 负载均衡
 
 ### 3.2 confirm(中大任务才做;小任务跳过)
 把规划摘要派给每个可用 agent 征一轮意见,任务卡就一句话:「对分工/边界/验收有异议吗?≤100 字,无异议回 LGTM」。**只此一轮**,有价值的意见吸收后由 Claude 裁决定稿,不开自由讨论。
@@ -55,19 +63,21 @@ probe → plan → [confirm] → execute → review → adjudicate → merge →
 zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-1.md --cwd <目标仓库> \
   > $WORK/replies/REPLY-1.md 2>>$WORK/dispatch.log
 
-# 评审:--readonly 物理只读锁(grok=工具白名单/codex=read-only沙箱/opencode=plan agent)
-zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeout 300 \
+# 评审:--readonly 物理只读锁(grok=工具白名单/codex=read-only沙箱/opencode=plan agent);评审同样传 --cwd
+zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --cwd <目标仓库> --timeout 300 \
   > $WORK/reviews/REVIEW-1-by-<agent>.md 2>>$WORK/dispatch.log
 ```
 
 - dispatch 自动注入 protocol.md 前缀,对方自动知道契约(这就是「大家一起用」:协议在文件里,不在谁的脑子里)
 - 多家并行:Bash 并行调用;评审**流水线式**,一家完成即派审
-- 评审超时预算 300s(grok 深审实测 107s+)
+- 评审超时预算 300s(grok 深审实测 107s+);**部分评审结果(超时截断)不得进入裁决**——审全了才算数
 - dispatch 失败(exit 1)看 stderr JSON 的 error 归因:额度→改派;超时→放宽或改派;空回复→重试一次
+- **`--continue` 仅限串行单任务**:并行/交错派发时会接错会话;多任务续会话用显式会话 ID
 
 ### 3.4 adjudicate(裁决)
 - 评审发现**逐条复现验证**,以复现结果裁决,不投票;不可复现的不采纳但记录
 - 写 `$WORK/verdicts/VERDICT-<id>.md`:每条发现 → 采纳/驳回 + 依据
+- **裁决「采纳且必须修」的 P0 = merge 前阻断**:先生成修复卡走小循环,修复并复审通过前禁止 merge——防"评审红灯仍合并,终验再炸"
 - 误报也是数据:记入 ledger
 
 ### 3.5 merge(合并交付)
@@ -76,17 +86,25 @@ zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeo
 
 ### 3.6 acceptance(终验对账——done 的唯一放行门)
 
-merge 完成 ≠ 任务完成。拿着 plan 阶段冻结的 `$WORK/REQUIREMENTS.md` **逐条对账**(格式见 protocol.md §7b):
+merge 完成 ≠ 任务完成。拿着 plan 阶段冻结的 `$WORK/REQUIREMENTS.md` **逐条对账**,结论写 `$WORK/ACCEPTANCE-<轮次>.md`(格式见 protocol.md §7b):
 
-1. **逐条判定**:每条需求 → 完成/部分/未完成/存疑
-   - 证据只认机器可验证的:测试输出、diff、命令运行结果;"看起来做了"不算,**证据不足一律记未完成**(治「要求交付的≠定义了判据的,两个集合没人对账」)
-   - 对照表防偏科:逐条过,不许只挑好验的维、只盖看到的一半
-2. **存疑条目双源复核**:派一位跨源 agent 独立验证——它拿需求+验收标准**自己跑**,回 PASS/FAIL+理由(治主持者自查盲区:声称≠实际)
-3. **回炉推动闭环**:未完成/质量不达标的条目 → 生成回炉任务卡(注明轮次与上轮未达标原因)→ 重走 execute→review→adjudicate→merge→acceptance 小循环
-   - 每轮回炉记入 ledger;**最多 3 轮**——3 轮后仍不达标,停下
-4. **放行或如实上报例外**:
-   - 全部条目「完成+有证据+评审 P0/P1 清零」→ done
-   - 确有无法完成的需求(外部依赖缺失/需求自身矛盾)→ `done-with-exceptions`:向用户输出例外清单(需求/差在哪/卡了几轮/建议),由用户裁决——**不无限硬磨,更不装作完成**
+1. **逐条判定**:每条需求 → 完成/未完成/存疑
+   - 证据必须对应条目冻结时的 **oracle(验证命令+期望结果)**:跑命令、比对输出;无关 diff、永远成功的测试、"看起来做了"一律不算,**证据不足记未完成**(治「两个集合没人对账」)
+   - **状态不留灰区**:`部分` 按未完成处理;`存疑` 复核 PASS→完成、FAIL→未完成、复核失败/无人可派→按未完成回炉并记录(复核不钉住 acceptance)
+2. **复核双通道(防主持者自查盲区)**:
+   - 存疑条目:派跨源 agent 独立复核——它拿需求+oracle **自己跑**,回 PASS/FAIL+理由
+   - **抽查通道**:每轮至少抽 1 条「完成」条目做跨源复核,**用户核心诉求条目必复核**——防主持者把假完成标成完成直接放行
+3. **回归验证(防改 A 坏 B)**:每轮回炉后,已达标条目的 oracle 重跑(全量成本高时至少抽核心条目)
+4. **评审完整性门**:「P0/P1 清零」= 存在评审报告 且 其中 P0/P1 均被裁决关闭;**零评审报告不满足放行**
+5. **回炉推动闭环**:未达标条目 → 生成 TASK-F<N> 回炉卡(注明轮次与上轮未达标原因)→ 重走 execute→review→adjudicate→merge→acceptance **完整小循环**;回炉产出的评审尽量换源,防盲区固化
+   - **每条需求独立计 3 轮上限**(首轮 acceptance 触发计第 1 轮),轮次记入 state.json;到顶,停下
+6. **放行或如实上报例外**:
+   - 全部条目「完成+证据+完整性门通过」→ done
+   - 确有无法完成的(外部依赖缺失/需求自身矛盾)→ `done-with-exceptions`:向用户输出例外清单(需求/差在哪/卡了几轮/建议),由用户裁决——**不无限硬磨,更不装作完成**
+7. **用户裁决后再入 / 需求变更**:
+   - 接受例外 = close;继续修 = 例外条目转正式需求,轮次重置(用户重开是新授权)
+   - 用户中途改需求 → REQUIREMENTS 换新版本重冻,已交付部分对旧版本对账
+8. **单源声明**:仅同源 agent 可用时评审照派,但 ACCEPTANCE 必须声明「本任务为单源评审,置信度降低」
 
 merge 每轮回炉后重复本节,直到放行。
 
