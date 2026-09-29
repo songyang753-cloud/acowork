@@ -83,9 +83,9 @@ zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeo
 
 处置手册见 `references/bad-cases.md`(A 可用性/B 脚本判定/C 执行一致性/D 评审质量/E 交付安全/F 降级路径)。核心降级链:摘除→重试1次→改派→Claude 接手;评审无人可派→Claude 自审并向用户声明单源。
 
-## 6. 本机环境事实(2026-09-29 实测)
+## 6. 作者本机实测环境(2026-09-29;你的路径/后端可能不同,按需替换)
 
-- grok v1.0.41(`~/.grok/bin/grok`,sub2api 转光帆网关;必须 `-p`,位置参数会进 TUI 挂死)
+- grok v1.0.41(`~/.grok/bin/grok`;必须 `-p`,位置参数会进 TUI 挂死)
 - opencode v1.18.33(`~/.opencode/bin/opencode`,glm provider,同 GLM 后端——与 Claude 互审价值低)
 - codex(`/opt/homebrew/bin/codex`,2026-09-29 额度恢复后成功路径已实测;非 git 目录需 `--skip-git-repo-check`)
 - grok 评审深度高但慢(107s/轮),opencode 快但经 glm 网关有延迟波动(探针预算给 120s+);调度时按此特性路由

@@ -23,7 +23,7 @@ council 的解法:
 ## 安装
 
 ```bash
-git clone <本仓库> ~/.claude/skills/council
+git clone https://github.com/songyang753-cloud/council.git ~/.claude/skills/council
 # 或任意位置 clone 后软链:
 ln -s /path/to/council ~/.claude/skills/council
 ```
