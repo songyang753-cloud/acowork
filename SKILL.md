@@ -31,15 +31,17 @@ zsh $SKILL/scripts/probe.sh 120 > $WORK/roster.json        # 可用性探测,std
 ## 2. 状态机与推进(Claude 的主持循环)
 
 ```
-probe → plan → [confirm] → execute → review → adjudicate → merge → done
+probe → plan → [confirm] → execute → review → adjudicate → merge → acceptance → done
+                                                       ↑______回炉小循环______|
 ```
 
-每步把进度写进 `$WORK/state.json`(`{"phase":"...","tasks":[...]}`);会话断了从它恢复,文件全在 `$WORK`,别依赖对话记忆。
+每步把进度写进 `$WORK/state.json`(`{"phase":"...","tasks":[...]}`);会话断了从它恢复,文件全在 `$WORK`,别依赖对话记忆。**acceptance 是 done 的唯一放行门**(见 3.6)。
 
 ## 3. 各步操作
 
 ### 3.1 plan(规划与分工)
 - Claude 起草:任务拆分(标注依赖,DAG)、每张任务卡五要素(见 protocol.md §4)、验收标准优先写成可机器验证的
+- **冻结需求清单**:把用户原始需求拆成编号条目,连同每条的验收标准写入 `$WORK/REQUIREMENTS.md`——这是终验对账的唯一基准;验收标准一旦冻结不许放松(做不到就报例外,不许改判据换绿)
 - **文件边界不重叠**是并行写码的前提;有重叠的排串行
 - 调度六原则(protocol.md §8):可用性优先 / 跨源配对 / 独立并行 / 流水线(完成即审不等全员)/ 负载均衡 / 特长路由(grok=500k 长上下文+联网,opencode=GLM 快糙,claude=裁决合并)
 
@@ -72,6 +74,22 @@ zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeo
 - Claude 亲手合并、解决冲突;**合并后必须跑测试/门禁**——机器验证是最后一道质量门,不许跳
 - 诚实计数写入 `$WORK/ledger.json`:各家产出数/发现数/误报数,交付时如实汇报,不美化
 
+### 3.6 acceptance(终验对账——done 的唯一放行门)
+
+merge 完成 ≠ 任务完成。拿着 plan 阶段冻结的 `$WORK/REQUIREMENTS.md` **逐条对账**(格式见 protocol.md §7b):
+
+1. **逐条判定**:每条需求 → 完成/部分/未完成/存疑
+   - 证据只认机器可验证的:测试输出、diff、命令运行结果;"看起来做了"不算,**证据不足一律记未完成**(治「要求交付的≠定义了判据的,两个集合没人对账」)
+   - 对照表防偏科:逐条过,不许只挑好验的维、只盖看到的一半
+2. **存疑条目双源复核**:派一位跨源 agent 独立验证——它拿需求+验收标准**自己跑**,回 PASS/FAIL+理由(治主持者自查盲区:声称≠实际)
+3. **回炉推动闭环**:未完成/质量不达标的条目 → 生成回炉任务卡(注明轮次与上轮未达标原因)→ 重走 execute→review→adjudicate→merge→acceptance 小循环
+   - 每轮回炉记入 ledger;**最多 3 轮**——3 轮后仍不达标,停下
+4. **放行或如实上报例外**:
+   - 全部条目「完成+有证据+评审 P0/P1 清零」→ done
+   - 确有无法完成的需求(外部依赖缺失/需求自身矛盾)→ `done-with-exceptions`:向用户输出例外清单(需求/差在哪/卡了几轮/建议),由用户裁决——**不无限硬磨,更不装作完成**
+
+merge 每轮回炉后重复本节,直到放行。
+
 ## 4. 交付纪律
 
 - 协作中间产物(任务卡/回包/评审/裁决)只留 `$WORK`,**不进 git、不污染目标仓库**
@@ -81,7 +99,7 @@ zsh $SKILL/scripts/dispatch.sh <agent> $WORK/tasks/TASK-R1.md --readonly --timeo
 
 ## 5. 故障与边界
 
-处置手册见 `references/bad-cases.md`(A 可用性/B 脚本判定/C 执行一致性/D 评审质量/E 交付安全/F 降级路径)。核心降级链:摘除→重试1次→改派→Claude 接手;评审无人可派→Claude 自审并向用户声明单源。
+处置手册见 `references/bad-cases.md`(A 可用性/B 脚本判定/C 执行一致性/D 评审质量/E 交付安全/F 降级/G 终验对账)。核心降级链:摘除→重试1次→改派→Claude 接手;评审无人可派→Claude 自审并向用户声明单源;终验 3 轮不达标→done-with-exceptions 交用户裁决。
 
 ## 6. 作者本机实测环境(2026-09-29;你的路径/后端可能不同,按需替换)
 

@@ -28,10 +28,13 @@ $WORK/
 ## 3. 状态机(主持者推进)
 
 ```
-probe → plan → [confirm] → execute → review → adjudicate → merge → done
+probe → plan → [confirm] → execute → review → adjudicate → merge → acceptance → done
+                                                       ↑______回炉小循环______|
 ```
 
 小任务快速通道可省略 confirm。任何一步可从 state.json 恢复(断点续作)。
+
+**acceptance(终验对账)是 done 的唯一放行门**:拿着 plan 阶段冻结的需求清单逐条对账,全部需求有证据地达标才 done;不达标的生成回炉任务卡重走 execute→merge→acceptance 小循环,最多 3 轮;3 轮后仍不达标 → done-with-exceptions(向用户如实列清单,由用户裁决),不许无限硬磨,更不许装作完成。
 
 ## 4. 任务卡格式(WORKER/REVIEWER 收到的就是这个)
 
@@ -70,6 +73,22 @@ probe → plan → [confirm] → execute → review → adjudicate → merge →
 4. **诚实计数**:如实报告产出与发现,不美化、不夸大;误报也是数据
 5. **中间产物只写工作区**,不进 git、不污染目标仓库
 6. **守时**:回包注明耗时;超过任务卡时限返回部分结果+完成度百分比,不静默超时
+7. **验收只认证据**:需求达成 = 可机器验证的证据(测试结果/diff/运行输出),"看起来做了"不算;证据不足一律记未完成
+8. **不为过验收降标准**:验收判据在 plan 阶段冻结后不许放松;做不到就如实报 done-with-exceptions,不许改判据换绿
+
+## 7b. 终验对账格式(ACCEPTANCE,主持者产出)
+
+```markdown
+# ACCEPTANCE <轮次> by claude
+需求基准:$WORK/REQUIREMENTS.md(plan 阶段冻结,编号+验收标准)
+
+| # | 需求 | 状态 完成/部分/未完成/存疑 | 证据(机器可验证) | 判据出处 |
+|---|---|---|---|---|
+```
+
+- 「存疑」条目必须派跨源 agent 独立复核:对方拿需求+验收标准自己跑,回 PASS/FAIL+理由
+- 回炉条目生成 TASK-RN 任务卡,注明「第 N 轮回炉,上轮未达标原因」
+- 3 轮上限:第 3 轮后仍不达标 → `done-with-exceptions`,向用户输出例外清单(需求/差在哪/建议),用户裁决
 
 ## 8. 调度规则(主持者执行;各方知悉以便预期)
 

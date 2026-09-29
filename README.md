@@ -19,6 +19,7 @@ council 的解法:
 | 评审幻觉/误报 | 裁决制:主持者逐条机器复现,不可复现不采纳 |
 | 理解漂移 | 回声确认:接单先复述理解+边界,不符即停 |
 | 会话中断全丢 | 文件系统即消息总线:任务卡/回包/评审/裁决全落盘,断点可恢复 |
+| **做完≠达标** | plan 冻结需求清单 → acceptance 终验逐条对账:证据不足=未完成、存疑派跨源复核、未达标回炉循环(3 轮上限)、确实做不到→例外清单交用户裁决,不装作完成 |
 
 ## 安装
 
@@ -43,8 +44,9 @@ ln -s /path/to/council ~/.claude/skills/council
 Claude 会自动走完整流程:
 
 ```
-probe(探测可用)→ plan(规划分工)→ [confirm(一轮意见)] 
+probe(探测可用)→ plan(规划分工+冻结需求清单)→ [confirm(一轮意见)]
 → execute(并行执行)→ review(跨源交叉评审)→ adjudicate(裁决+复现)→ merge(合并+跑测试)
+→ acceptance(终验对账:逐条对需求,未达标回炉,3轮上限)→ done / done-with-exceptions
 ```
 
 ## 仓库结构
@@ -53,7 +55,7 @@ probe(探测可用)→ plan(规划分工)→ [confirm(一轮意见)]
 council/
 ├── SKILL.md               # 主持者手册(Claude 视角:调度原则+交付纪律)
 ├── protocol.md            # 中立协作契约(角色/任务卡/回包/评审/裁决格式+状态机)
-├── references/bad-cases.md  # 33 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级)
+├── references/bad-cases.md  # 40 条 bad case 处置手册(A可用性/B脚本判定/C一致性/D评审/E安全/F降级/G终验对账)
 └── scripts/
     ├── probe.sh           # 可用性探测 → JSON roster(没额度直接摘除)
     └── dispatch.sh        # 统一派活器(姿势封装 + --readonly 物理只读锁 + 超时 + 标准回包)
